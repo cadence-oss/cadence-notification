@@ -27,9 +27,11 @@ import (
 	"strings"
 
 	cconfig "github.com/uber/cadence/common/config"
+	"github.com/uber/cadence/common/log/loggerimpl"
 	"github.com/urfave/cli"
 
 	"github.com/cadence-oss/cadence-notification/common/config"
+	"github.com/cadence-oss/cadence-notification/service"
 )
 
 // startHandler is the handler for the cli start command
@@ -49,6 +51,18 @@ func startHandler(c *cli.Context) {
 	if cfg.Log.Level == "debug" {
 		log.Printf("config=\n%v\n", cfg.String())
 	}
+
+	zapLogger, err := cfg.Log.NewZapLogger()
+	if err != nil {
+		log.Fatal("failed to create the zap logger, err: ", err.Error())
+	}
+	logger := loggerimpl.NewLogger(zapLogger)
+
+	notiService, err := service.NewService(&cfg, logger)
+	if err != nil{
+		log.Fatal("fail to create service", err)
+	}
+	notiService.Start()
 }
 
 func getEnvironment(c *cli.Context) string {

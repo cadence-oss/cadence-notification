@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package indexer
+package service
 
 import (
 	"fmt"
@@ -34,8 +34,8 @@ import (
 )
 
 type (
-	// Indexer used to consumer data from kafka then send to ElasticSearch
-	Indexer struct {
+	// Notificator used to consumer data from kafka then send to Notification Apps
+	Notificator struct {
 		config              *Config
 		kafkaClient         messaging.Client
 		esClient            es.GenericClient
@@ -60,18 +60,18 @@ const (
 	visibilityProcessorName = "visibility-processor"
 )
 
-// NewIndexer create a new Indexer
-func NewIndexer(
+// NewNotificator create a new Notificator
+func NewNotificator(
 	config *Config,
 	client messaging.Client,
 	esClient es.GenericClient,
 	esConfig *config.ElasticSearchConfig,
 	logger log.Logger,
 	metricsClient metrics.Client,
-) *Indexer {
+) *Notificator {
 	logger = logger.WithTags(tag.ComponentIndexer)
 
-	return &Indexer{
+	return &Notificator{
 		config:              config,
 		kafkaClient:         client,
 		esClient:            esClient,
@@ -82,7 +82,7 @@ func NewIndexer(
 }
 
 // Start indexer
-func (x *Indexer) Start() error {
+func (x *Notificator) Start() error {
 	visibilityApp := common.VisibilityAppName
 	visConsumerName := getConsumerName(x.visibilityIndexName)
 	x.visibilityProcessor = newIndexProcessor(visibilityApp, visConsumerName, x.kafkaClient, x.esClient,
@@ -91,7 +91,7 @@ func (x *Indexer) Start() error {
 }
 
 // Stop indexer
-func (x *Indexer) Stop() {
+func (x *Notificator) Stop() {
 	x.visibilityProcessor.Stop()
 }
 
