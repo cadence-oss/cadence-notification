@@ -34,7 +34,7 @@ import (
 )
 
 type (
-	// Notificator used to consumer data from kafka then send to Notification Apps
+	// Notificator used to consumer data from kafka then send to Subscriber Apps
 	Notificator struct {
 		config              *Config
 		kafkaClient         messaging.Client
