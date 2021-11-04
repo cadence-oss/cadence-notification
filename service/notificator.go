@@ -34,8 +34,8 @@ import (
 )
 
 type (
-	// Notificator used to consumer data from kafka then send to Subscriber Apps
-	Notificator struct {
+	// Notifier used to consumer data from kafka then send to Subscriber Apps
+	Notifier struct {
 		config              *Config
 		kafkaClient         messaging.Client
 		esClient            es.GenericClient
@@ -60,18 +60,18 @@ const (
 	visibilityProcessorName = "visibility-processor"
 )
 
-// NewNotificator create a new Notificator
-func NewNotificator(
+// NewNotificator create a new Notifier
+func NewNotifier(
 	config *Config,
 	client messaging.Client,
 	esClient es.GenericClient,
 	esConfig *config.ElasticSearchConfig,
 	logger log.Logger,
 	metricsClient metrics.Client,
-) *Notificator {
+) *Notifier {
 	logger = logger.WithTags(tag.ComponentIndexer)
 
-	return &Notificator{
+	return &Notifier{
 		config:              config,
 		kafkaClient:         client,
 		esClient:            esClient,
@@ -82,7 +82,7 @@ func NewNotificator(
 }
 
 // Start indexer
-func (x *Notificator) Start() error {
+func (x *Notifier) Start() error {
 	visibilityApp := common.VisibilityAppName
 	visConsumerName := getConsumerName(x.visibilityIndexName)
 	x.visibilityProcessor = newIndexProcessor(visibilityApp, visConsumerName, x.kafkaClient, x.esClient,
@@ -91,7 +91,7 @@ func (x *Notificator) Start() error {
 }
 
 // Stop indexer
-func (x *Notificator) Stop() {
+func (x *Notifier) Stop() {
 	x.visibilityProcessor.Stop()
 }
 
