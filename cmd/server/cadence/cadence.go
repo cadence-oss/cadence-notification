@@ -39,7 +39,6 @@ func startHandler(c *cli.Context) {
 	env := getEnvironment(c)
 	zone := getZone(c)
 	configDir := getConfigDir(c)
-	//rootDir := getRootDir(c)
 
 	log.Printf("Loading config; env=%v,zone=%v,configDir=%v\n", env, zone, configDir)
 
@@ -58,11 +57,11 @@ func startHandler(c *cli.Context) {
 	}
 	logger := loggerimpl.NewLogger(zapLogger)
 
-	notiService, err := service.NewService(&cfg, logger)
+	svc, err := service.NewService(&cfg, logger)
 	if err != nil{
 		log.Fatal("fail to create service", err)
 	}
-	notiService.Start()
+	svc.Start()
 }
 
 func getEnvironment(c *cli.Context) string {
