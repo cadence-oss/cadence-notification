@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Uber Technologies, Inc.
+// Copyright (c) 2021 Cadence workflow OSS organization
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package indexer
+package service
 
 import (
 	"fmt"
@@ -34,8 +34,8 @@ import (
 )
 
 type (
-	// Indexer used to consumer data from kafka then send to ElasticSearch
-	Indexer struct {
+	// Notifier used to consumer data from kafka then send to Subscriber Apps
+	Notifier struct {
 		config              *Config
 		kafkaClient         messaging.Client
 		esClient            es.GenericClient
@@ -60,18 +60,18 @@ const (
 	visibilityProcessorName = "visibility-processor"
 )
 
-// NewIndexer create a new Indexer
-func NewIndexer(
+// NewNotifier create a new Notifier
+func NewNotifier(
 	config *Config,
 	client messaging.Client,
 	esClient es.GenericClient,
 	esConfig *config.ElasticSearchConfig,
 	logger log.Logger,
 	metricsClient metrics.Client,
-) *Indexer {
+) *Notifier {
 	logger = logger.WithTags(tag.ComponentIndexer)
 
-	return &Indexer{
+	return &Notifier{
 		config:              config,
 		kafkaClient:         client,
 		esClient:            esClient,
@@ -82,7 +82,7 @@ func NewIndexer(
 }
 
 // Start indexer
-func (x *Indexer) Start() error {
+func (x *Notifier) Start() error {
 	visibilityApp := common.VisibilityAppName
 	visConsumerName := getConsumerName(x.visibilityIndexName)
 	x.visibilityProcessor = newIndexProcessor(visibilityApp, visConsumerName, x.kafkaClient, x.esClient,
@@ -91,7 +91,7 @@ func (x *Indexer) Start() error {
 }
 
 // Stop indexer
-func (x *Indexer) Stop() {
+func (x *Notifier) Stop() {
 	x.visibilityProcessor.Stop()
 }
 
