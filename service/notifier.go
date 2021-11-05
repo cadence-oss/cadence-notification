@@ -60,7 +60,7 @@ const (
 	visibilityProcessorName = "visibility-processor"
 )
 
-// NewNotificator create a new Notifier
+// NewNotifier create a new Notifier
 func NewNotifier(
 	config *Config,
 	client messaging.Client,
