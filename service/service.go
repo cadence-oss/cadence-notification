@@ -26,6 +26,10 @@ import (
 	"github.com/uber-go/tally"
 	"github.com/uber/cadence/common"
 	"github.com/uber/cadence/common/log"
+	"github.com/uber/cadence/common/log/tag"
+	"github.com/uber/cadence/common/messaging/kafka"
+	"github.com/uber/cadence/common/metrics"
+	"github.com/uber/cadence/common/service"
 
 	"github.com/cadence-oss/cadence-notification/common/config"
 )
@@ -63,10 +67,25 @@ func (s *Service) Start() {
 	}
 	s.logger.Info("notification service starting")
 
-	// TODO start notificator
-
+	metricsClient := metrics.NewClient(s.metricScope, service.GetMetricsServiceIdx(common.WorkerServiceName, s.logger))
+	kafkaClient := kafka.NewKafkaClient(&s.config.Kafka, metricsClient, s.logger, s.metricScope, false)
+	var notifiers []*notifier
+	for _, sub := range s.config.Service.Subscribers {
+		n, err := newNotifier(kafkaClient, &sub, s.logger, s.metricScope)
+		if err != nil {
+			s.logger.Fatal("failed to start notifier", tag.Error(err))
+		}
+		err = n.Start()
+		if err != nil {
+			s.logger.Fatal("failed to start notifier", tag.Error(err))
+		}
+		notifiers = append(notifiers, n)
+	}
 	s.logger.Info("notification service started")
 	<-s.stopC
+	for _, n := range notifiers {
+		n.Stop()
+	}
 }
 
 // Stop is called to stop the service

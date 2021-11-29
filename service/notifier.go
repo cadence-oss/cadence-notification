@@ -62,14 +62,14 @@ var (
 	errUnknownMessageType = &types.BadRequestError{Message: "unknown message type"}
 )
 
-func newNotifier(consumerConfig *config.KafkaConsumer, kafkaClient messaging.Client,
-	subscriberConfig *config.Subscriber, logger log.Logger, metricScope tally.Scope) (*notifier, error) {
+func newNotifier(kafkaClient messaging.Client, subscriberConfig *config.Subscriber, logger log.Logger, metricScope tally.Scope) (*notifier, error) {
+	consumerConfig := subscriberConfig.Consumer
 	consumer, err := kafkaClient.NewConsumer(subscriberConfig.Name, consumerConfig.ConsumerGroup)
 	if err != nil {
 		return nil, err
 	}
 	return &notifier{
-		consumerConfig:   consumerConfig,
+		consumerConfig:   &consumerConfig,
 		consumer:         consumer,
 		subscriberConfig: subscriberConfig,
 
