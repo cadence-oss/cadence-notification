@@ -57,8 +57,10 @@ func startHandler(c *cli.Context) {
 	}
 	logger := loggerimpl.NewLogger(zapLogger)
 
-	svc, err := service.NewService(&cfg, logger)
-	if err != nil{
+	metricScope := cfg.Service.Metrics.NewScope(logger, "cadence-notification")
+
+	svc, err := service.NewService(&cfg, logger, metricScope)
+	if err != nil {
 		log.Fatal("fail to create service", err)
 	}
 	svc.Start()

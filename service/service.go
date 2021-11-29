@@ -23,6 +23,7 @@ package service
 import (
 	"sync/atomic"
 
+	"github.com/uber-go/tally"
 	"github.com/uber/cadence/common"
 	"github.com/uber/cadence/common/log"
 
@@ -32,10 +33,11 @@ import (
 type (
 	// Service represents the cadence notification service. This service hosts background processing for delivering notifications
 	Service struct {
-		status int32
-		stopC  chan struct{}
-		logger log.Logger
-		config *config.Config
+		status      int32
+		stopC       chan struct{}
+		logger      log.Logger
+		metricScope tally.Scope
+		config      *config.Config
 	}
 )
 
@@ -43,12 +45,14 @@ type (
 func NewService(
 	config *config.Config,
 	logger log.Logger,
+	metricScope tally.Scope,
 ) (*Service, error) {
 	return &Service{
-		status:   common.DaemonStatusInitialized,
-		config:   config,
-		logger: logger,
-		stopC:    make(chan struct{}),
+		status:      common.DaemonStatusInitialized,
+		config:      config,
+		logger:      logger,
+		metricScope: metricScope,
+		stopC:       make(chan struct{}),
 	}, nil
 }
 
