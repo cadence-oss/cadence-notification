@@ -9,7 +9,7 @@ service:
             scheme: "http"
             host: "127.0.0.1:8810"
           retryInterval: 10s # default to 1s
-      comsumer:
+      consumer:
         consumerGroup: cadence-notificationAppA-group
         consumerGroupDlqTopic: cadence-notificationAppA-group-dlq
         iniitalOffset: "newest" # or "oldest"
@@ -32,9 +32,9 @@ kafka:
   topics:
     cadence-visibility-dev:
       cluster: test
-    cadence-visibility-dev-dlq:
+    cadence-notifier-dev-dlq:
       cluster: test
   applications:
     notificationAppA:
       topic: cadence-visibility-dev
-      dlq-topic: cadence-visibility-dev-dlq
+      dlq-topic: cadence-notifier-dev-dlq
