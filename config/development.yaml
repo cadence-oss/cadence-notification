@@ -32,7 +32,9 @@ kafka:
   topics:
     cadence-visibility-dev:
       cluster: test
+    cadence-visibility-dev-dlq:
+      cluster: test
   applications:
     notificationAppA:
       topic: cadence-visibility-dev
-
+      dlq-topic: cadence-visibility-dev-dlq
