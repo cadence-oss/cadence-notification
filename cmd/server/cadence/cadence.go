@@ -47,9 +47,7 @@ func startHandler(c *cli.Context) {
 	if err != nil {
 		log.Fatal("Config file corrupted.", err)
 	}
-	if cfg.Log.Level == "debug" {
-		log.Printf("config=\n%v\n", cfg.String())
-	}
+	log.Printf("loaded config=\n%v\n", cfg.String())
 
 	zapLogger, err := cfg.Log.NewZapLogger()
 	if err != nil {
