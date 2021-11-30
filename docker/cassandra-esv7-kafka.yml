@@ -5,12 +5,16 @@ services:
     ports:
       - "9042:9042"
   elasticsearch:
+    networks:
+      - cadence-notification-network
     image: docker.elastic.co/elasticsearch/elasticsearch-oss:7.9.3
     ports:
       - "9200:9200"
     environment:
       - discovery.type=single-node
   kafka:
+    networks:
+      - cadence-notification-network
     image: wurstmeister/kafka:2.12-2.1.1
     depends_on:
       - zookeeper
@@ -21,6 +25,12 @@ services:
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
   zookeeper:
+    networks:
+      - cadence-notification-network
     image: wurstmeister/zookeeper:3.4.6
     ports:
       - "2181:2181"
+networks:
+  cadence-notification-network:
+    driver: bridge
+    name: cadence-notification-network
