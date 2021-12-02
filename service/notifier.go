@@ -21,80 +21,232 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
+	"sync"
+	"sync/atomic"
+	"time"
 
+	"github.com/uber-go/tally"
+	"github.com/uber/cadence/.gen/go/indexer"
 	"github.com/uber/cadence/common"
-	"github.com/uber/cadence/common/config"
-	"github.com/uber/cadence/common/dynamicconfig"
-	es "github.com/uber/cadence/common/elasticsearch"
+	"github.com/uber/cadence/common/codec"
+	"github.com/uber/cadence/common/definition"
 	"github.com/uber/cadence/common/log"
 	"github.com/uber/cadence/common/log/tag"
 	"github.com/uber/cadence/common/messaging"
-	"github.com/uber/cadence/common/metrics"
+	"github.com/uber/cadence/common/types"
+
+	"github.com/cadence-oss/cadence-notification/common/config"
 )
 
-type (
-	// Notifier used to consumer data from kafka then send to Subscriber Apps
-	Notifier struct {
-		config              *Config
-		kafkaClient         messaging.Client
-		esClient            es.GenericClient
-		logger              log.Logger
-		metricsClient       metrics.Client
-		visibilityProcessor *indexProcessor
-		visibilityIndexName string
+const defaultConcurrency = 10
+
+// notifier consumes visibility message from Kafka topic and notifier external systems
+type notifier struct {
+	consumer         messaging.Consumer
+	subscriberConfig *config.Subscriber
+	consumerConfig   *config.KafkaConsumer
+
+	msgEncoder  codec.BinaryEncoder
+	logger      log.Logger
+	metricScope tally.Scope
+
+	isStarted  int32
+	isStopped  int32
+	shutdownWG sync.WaitGroup
+	shutdownCh chan struct{}
+}
+
+var (
+	errUnknownMessageType = &types.BadRequestError{Message: "unknown message type"}
+)
+
+func newNotifier(kafkaClient messaging.Client, subscriberConfig *config.Subscriber, logger log.Logger, metricScope tally.Scope) (*notifier, error) {
+	consumerConfig := subscriberConfig.Consumer
+	consumer, err := kafkaClient.NewConsumer(subscriberConfig.Name, consumerConfig.ConsumerGroup)
+	if err != nil {
+		return nil, err
+	}
+	return &notifier{
+		consumerConfig:   &consumerConfig,
+		consumer:         consumer,
+		subscriberConfig: subscriberConfig,
+
+		msgEncoder:  codec.NewThriftRWEncoder(),
+		logger:      logger.WithTags(tag.Name("Notifier-" + subscriberConfig.Name)),
+		metricScope: metricScope,
+		shutdownCh:  make(chan struct{}),
+	}, nil
+}
+
+func (p *notifier) Start() error {
+	if !atomic.CompareAndSwapInt32(&p.isStarted, 0, 1) {
+		return nil
+	}
+	p.logger.Info("notifier state changed", tag.LifeCycleStarting)
+
+	if err := p.consumer.Start(); err != nil {
+		p.logger.Info("notifier state changed error", tag.LifeCycleStartFailed, tag.Error(err))
+		return err
 	}
 
-	// Config contains all configs for indexer
-	Config struct {
-		IndexerConcurrency       dynamicconfig.IntPropertyFn
-		ESProcessorNumOfWorkers  dynamicconfig.IntPropertyFn
-		ESProcessorBulkActions   dynamicconfig.IntPropertyFn // max number of requests in bulk
-		ESProcessorBulkSize      dynamicconfig.IntPropertyFn // max total size of bytes in bulk
-		ESProcessorFlushInterval dynamicconfig.DurationPropertyFn
-		ValidSearchAttributes    dynamicconfig.MapPropertyFn
+	p.shutdownWG.Add(1)
+	go p.processorPump()
+
+	p.logger.Info("notifier state changed", tag.LifeCycleStarted)
+	return nil
+}
+
+func (p *notifier) Stop() {
+	if !atomic.CompareAndSwapInt32(&p.isStopped, 0, 1) {
+		return
 	}
-)
 
-const (
-	visibilityProcessorName = "visibility-processor"
-)
+	p.logger.Info("notifier state changed", tag.LifeCycleStopping)
+	defer p.logger.Info("notifier state changed", tag.LifeCycleStopped)
 
-// NewNotifier create a new Notifier
-func NewNotifier(
-	config *Config,
-	client messaging.Client,
-	esClient es.GenericClient,
-	esConfig *config.ElasticSearchConfig,
-	logger log.Logger,
-	metricsClient metrics.Client,
-) *Notifier {
-	logger = logger.WithTags(tag.ComponentIndexer)
+	if atomic.LoadInt32(&p.isStarted) == 1 {
+		close(p.shutdownCh)
+	}
 
-	return &Notifier{
-		config:              config,
-		kafkaClient:         client,
-		esClient:            esClient,
-		logger:              logger,
-		metricsClient:       metricsClient,
-		visibilityIndexName: esConfig.Indices[common.VisibilityAppName],
+	if success := common.AwaitWaitGroup(&p.shutdownWG, time.Minute); !success {
+		p.logger.Info("notifier state changed error", tag.LifeCycleStopTimedout)
 	}
 }
 
-// Start indexer
-func (x *Notifier) Start() error {
-	visibilityApp := common.VisibilityAppName
-	visConsumerName := getConsumerName(x.visibilityIndexName)
-	x.visibilityProcessor = newIndexProcessor(visibilityApp, visConsumerName, x.kafkaClient, x.esClient,
-		visibilityProcessorName, x.visibilityIndexName, x.config, x.logger, x.metricsClient)
-	return x.visibilityProcessor.Start()
+func (p *notifier) processorPump() {
+	defer p.shutdownWG.Done()
+
+	var workerWG sync.WaitGroup
+	concurrency := defaultConcurrency
+	if p.consumerConfig.Concurrency > 0 {
+		concurrency = p.consumerConfig.Concurrency
+	}
+
+	for workerID := 0; workerID < concurrency; workerID++ {
+		workerWG.Add(1)
+		go p.messageProcessLoop(&workerWG)
+	}
+
+	<-p.shutdownCh
+	// Processor is shutting down, close the underlying consumer
+	p.consumer.Stop()
+
+	p.logger.Info("notifier pump shutting down.")
+	if success := common.AwaitWaitGroup(&workerWG, 10*time.Second); !success {
+		p.logger.Warn("notifier timed out on worker shutdown.")
+	}
 }
 
-// Stop indexer
-func (x *Notifier) Stop() {
-	x.visibilityProcessor.Stop()
+func (p *notifier) messageProcessLoop(workerWG *sync.WaitGroup) {
+	defer workerWG.Done()
+
+	for msg := range p.consumer.Messages() {
+		sw := p.metricScope.Timer(processLatency).Start()
+		err := p.process(msg)
+		sw.Stop()
+		if err != nil {
+			_ = msg.Nack()
+		}
+	}
 }
 
-func getConsumerName(topic string) string {
-	return fmt.Sprintf("%s-consumer", topic)
+func (p *notifier) process(kafkaMsg messaging.Message) error {
+	logger := p.logger.WithTags(tag.KafkaPartition(kafkaMsg.Partition()), tag.KafkaOffset(kafkaMsg.Offset()), tag.AttemptStart(time.Now()))
+
+	decodedMsg, err := p.deserialize(kafkaMsg.Value())
+	if err != nil {
+		logger.Error("Failed to deserialize index messages.", tag.Error(err))
+		p.metricScope.Counter(corruptedData)
+		return err
+	}
+
+	return p.notifySubscriber(decodedMsg, kafkaMsg)
+}
+
+func (p *notifier) deserialize(payload []byte) (*indexer.Message, error) {
+	var msg indexer.Message
+	if err := p.msgEncoder.Decode(payload, &msg); err != nil {
+		return nil, err
+	}
+	return &msg, nil
+}
+
+func (p *notifier) notifySubscriber(decodedMsg *indexer.Message, kafkaMsg messaging.Message) error {
+
+	switch decodedMsg.GetMessageType() {
+	case indexer.MessageTypeIndex:
+		id := fmt.Sprintf("%v-%v", kafkaMsg.Partition(), kafkaMsg.Offset())
+		notification, err := p.generateNotification(decodedMsg, id)
+		if err != nil {
+			_ = kafkaMsg.Nack()
+		}
+		p.logger.Info("for testing notification consuming, will be removed in next PR: Notification", tag.Value(notification))
+		_ = kafkaMsg.Ack()
+	case indexer.MessageTypeDelete:
+		// this is when workflow run passes retention, noop for now
+		_ = kafkaMsg.Ack()
+	default:
+		p.logger.Error("Unknown message type")
+		p.metricScope.Counter(corruptedData)
+		return errUnknownMessageType
+	}
+
+	return nil
+}
+
+func (p *notifier) generateNotification(msg *indexer.Message, id string) (*Notification, error) {
+	searchAttrs, memo, err := p.dumpAllFieldsToMap(msg.Fields)
+	p.logger.Info("for testing notification consuming, will be removed in next PR: maps", tag.Value(searchAttrs))
+	if err != nil {
+		return nil, err
+	}
+	notification := &Notification{
+		ID:         id,
+		DomainID:   msg.GetDomainID(),
+		WorkflowID: msg.GetWorkflowID(),
+		RunID:      msg.GetRunID(),
+		// TODO WorkflowType, startedTime, closedTime
+		SearchAttributes: searchAttrs,
+		Memo:             memo,
+	}
+	return notification, nil
+}
+
+// return search attributes, memo, and error
+func (p *notifier) dumpAllFieldsToMap(fields map[string]*indexer.Field) (map[string]interface{}, map[string]interface{}, error) {
+	sa := make(map[string]interface{})
+	memo := make(map[string]interface{})
+	for k, v := range fields {
+		switch v.GetType() {
+		case indexer.FieldTypeString:
+			sa[k] = v.GetStringData()
+		case indexer.FieldTypeInt:
+			sa[k] = v.GetIntData()
+		case indexer.FieldTypeBool:
+			sa[k] = v.GetBoolData()
+		case indexer.FieldTypeBinary:
+			if k == definition.Memo {
+				memo[k] = v.GetBinaryData()
+			} else { // custom search attributes
+				sa[k] = p.decodeSearchAttrBinary(v.GetBinaryData(), k)
+			}
+		default:
+			// must be bug in code and bad deployment, check data sent from producer
+			p.logger.Error("Unknown field type")
+			return nil, nil, fmt.Errorf("unknown field type " + v.GetType().String())
+		}
+	}
+	return sa, memo, nil
+}
+
+func (p *notifier) decodeSearchAttrBinary(bytes []byte, key string) interface{} {
+	var val interface{}
+	err := json.Unmarshal(bytes, &val)
+	if err != nil {
+		p.logger.Error("Error when decode search attributes values.", tag.Error(err), tag.ESField(key))
+		p.metricScope.Counter(corruptedData)
+	}
+	return val
 }

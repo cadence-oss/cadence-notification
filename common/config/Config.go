@@ -67,6 +67,8 @@ type (
 		ConsumerGroupDlqTopic string  `yaml:"consumerGroupDlqTopic"`
 		// "newest" or "oldest" for consumer group first time to consume
 		InitialOffset string  `yaml:"initialOffset"`
+		// concurrency per app per host, default to 10
+		Concurrency int `yaml:"concurrency"`
 	}
 
 	// Delivery defines how to deliver the notification

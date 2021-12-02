@@ -47,9 +47,7 @@ func startHandler(c *cli.Context) {
 	if err != nil {
 		log.Fatal("Config file corrupted.", err)
 	}
-	if cfg.Log.Level == "debug" {
-		log.Printf("config=\n%v\n", cfg.String())
-	}
+	log.Printf("loaded config=\n%v\n", cfg.String())
 
 	zapLogger, err := cfg.Log.NewZapLogger()
 	if err != nil {
@@ -57,8 +55,10 @@ func startHandler(c *cli.Context) {
 	}
 	logger := loggerimpl.NewLogger(zapLogger)
 
-	svc, err := service.NewService(&cfg, logger)
-	if err != nil{
+	metricScope := cfg.Service.Metrics.NewScope(logger, "cadence-notification")
+
+	svc, err := service.NewService(&cfg, logger, metricScope)
+	if err != nil {
 		log.Fatal("fail to create service", err)
 	}
 	svc.Start()
