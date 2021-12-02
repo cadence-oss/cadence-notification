@@ -56,8 +56,6 @@ ifeq ($(shell uname -sm),Darwin arm64)
 EMULATE_X86 = arch -x86_64
 endif
 
-PROJECT_ROOT = github.com/uber/cadence
-
 # helper for executing bins that need other bins, just `$(BIN_PATH) the_command ...`
 # I'd recommend not exporting this in general, to reduce the chance of accidentally using non-versioned tools.
 BIN_PATH := PATH="$(abspath $(BIN)):$$PATH"
