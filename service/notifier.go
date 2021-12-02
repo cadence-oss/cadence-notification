@@ -183,6 +183,7 @@ func (p *notifier) notifySubscriber(decodedMsg *indexer.Message, kafkaMsg messag
 			_ = kafkaMsg.Nack()
 		}
 		p.logger.Info("for testing notification consuming, will be removed in next PR: Notification", tag.Value(notification))
+		_ = kafkaMsg.Ack()
 	case indexer.MessageTypeDelete:
 		// this is when workflow run passes retention, noop for now
 		_ = kafkaMsg.Ack()
