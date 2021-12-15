@@ -28,6 +28,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	cconfig "github.com/uber/cadence/common/config"
 	"github.com/uber/cadence/common/log/loggerimpl"
@@ -140,23 +141,56 @@ func BuildCLI() *cli.App {
 			Aliases: []string{""},
 			Flags: []cli.Flag{
 				cli.StringFlag{
-					Name:  "service",
-					Value: "",
+					Name:  "services",
+					Value: "receiver, notifier",
 					Usage: "set up webhook test endpoint",
 				},
 			},
 			Usage: "start cadence notification service",
 			Action: func(c *cli.Context) {
-				if c.String("service") == "receiver" {
-					go startTestWebhookEndpoint()
+				var wg sync.WaitGroup
+				services := getServices(c)
+
+				for _, service := range services {
+					wg.Add(1)
+					go launchService(service, c)
 				}
-				startHandler(c)
+
+				wg.Wait()
 			},
 		},
 	}
-
 	return app
+}
 
+func launchService(service string, c *cli.Context) {
+	switch service {
+	case "notifier":
+		startHandler(c)
+		break
+	case "receiver":
+		startTestWebhookEndpoint()
+		break
+	default:
+		log.Printf("Invalid service: %v", service)
+	}
+}
+
+func getServices(c *cli.Context) []string {
+	val := strings.TrimSpace(c.String("services"))
+	tokens := strings.Split(val, ",")
+
+	if len(tokens) == 0 {
+		return []string{"notifier"}
+	}
+
+	services := []string{}
+	for _, token := range tokens {
+		t := strings.TrimSpace(token)
+		services = append(services, t)
+	}
+
+	return services
 }
 
 func startTestWebhookEndpoint() {
@@ -179,11 +213,12 @@ func logIncomingRequest(w http.ResponseWriter, r *http.Request) {
 		var body []byte
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			panic(err)
+			log.Printf("[Failed to read request body]: %v", err.Error())
 		}
 
 		log.Printf("[Test server incoming request]: %v", string(body))
 	default:
 		fmt.Fprintf(w, "Only POST methods are supported.")
 	}
+	w.WriteHeader(http.StatusOK)
 }
