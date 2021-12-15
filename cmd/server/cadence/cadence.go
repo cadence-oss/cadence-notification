@@ -21,7 +21,10 @@
 package cadence
 
 import (
+	"fmt"
+	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -135,8 +138,18 @@ func BuildCLI() *cli.App {
 		{
 			Name:    "start",
 			Aliases: []string{""},
-			Usage:   "start cadence notification service",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "service",
+					Value: "",
+					Usage: "set up webhook test endpoint",
+				},
+			},
+			Usage: "start cadence notification service",
 			Action: func(c *cli.Context) {
+				if c.String("service") == "receiver" {
+					go startTestWebhookEndpoint()
+				}
 				startHandler(c)
 			},
 		},
@@ -144,4 +157,33 @@ func BuildCLI() *cli.App {
 
 	return app
 
+}
+
+func startTestWebhookEndpoint() {
+	http.HandleFunc("/", logIncomingRequest)
+
+	fmt.Printf("Starting server for testing...\n")
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func logIncomingRequest(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.Error(w, "404 not found.", http.StatusNotFound)
+		return
+	}
+
+	switch r.Method {
+	case "POST":
+		var body []byte
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			panic(err)
+		}
+
+		log.Printf("[Test server incoming request]: %v", string(body))
+	default:
+		fmt.Fprintf(w, "Only POST methods are supported.")
+	}
 }
