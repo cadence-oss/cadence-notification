@@ -203,12 +203,18 @@ func startTestWebhookEndpoint() {
 }
 
 func logIncomingRequest(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		log.Printf("Path not supoorted: %v", r.URL.Path)
+		http.Error(w, "404 not found.", http.StatusNotFound)
+		return
+	}
+
 	switch r.Method {
 	case "POST":
 		var body []byte
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			log.Printf("[Failed to read request body]: %v, URL: %v", err.Error(), r.URL.Path)
+			log.Printf("[Failed to read request body]: %v", err.Error())
 		}
 
 		log.Printf("[Test server incoming request]: %v, URL: %v", string(body), r.URL.Path)
