@@ -143,7 +143,7 @@ func BuildCLI() *cli.App {
 				cli.StringFlag{
 					Name:  "services",
 					Value: "receiver, notifier",
-					Usage: "set up webhook test endpoint",
+					Usage: "start services/components in this project",
 				},
 			},
 			Usage: "start cadence notification service",
@@ -181,7 +181,7 @@ func getServices(c *cli.Context) []string {
 	tokens := strings.Split(val, ",")
 
 	if len(tokens) == 0 {
-		return []string{"notifier"}
+		log.Fatal("No services specified for starting")
 	}
 
 	services := []string{}
@@ -204,6 +204,7 @@ func startTestWebhookEndpoint() {
 
 func logIncomingRequest(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
+		log.Printf("Path not supoorted: %v", r.URL.Path)
 		http.Error(w, "404 not found.", http.StatusNotFound)
 		return
 	}
@@ -216,7 +217,7 @@ func logIncomingRequest(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[Failed to read request body]: %v", err.Error())
 		}
 
-		log.Printf("[Test server incoming request]: %v", string(body))
+		log.Printf("[Test server incoming request]: %v, URL: %v", string(body), r.URL.Path)
 	default:
 		fmt.Fprintf(w, "Only POST methods are supported.")
 	}
