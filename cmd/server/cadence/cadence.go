@@ -21,10 +21,14 @@
 package cadence
 
 import (
+	"fmt"
+	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	cconfig "github.com/uber/cadence/common/config"
 	"github.com/uber/cadence/common/log/loggerimpl"
@@ -135,13 +139,87 @@ func BuildCLI() *cli.App {
 		{
 			Name:    "start",
 			Aliases: []string{""},
-			Usage:   "start cadence notification service",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "services",
+					Value: "receiver, notifier",
+					Usage: "start services/components in this project",
+				},
+			},
+			Usage: "start cadence notification service",
 			Action: func(c *cli.Context) {
-				startHandler(c)
+				var wg sync.WaitGroup
+				services := getServices(c)
+
+				for _, service := range services {
+					wg.Add(1)
+					go launchService(service, c)
+				}
+
+				wg.Wait()
 			},
 		},
 	}
-
 	return app
+}
 
+func launchService(service string, c *cli.Context) {
+	switch service {
+	case "notifier":
+		startHandler(c)
+		break
+	case "receiver":
+		startTestWebhookEndpoint()
+		break
+	default:
+		log.Printf("Invalid service: %v", service)
+	}
+}
+
+func getServices(c *cli.Context) []string {
+	val := strings.TrimSpace(c.String("services"))
+	tokens := strings.Split(val, ",")
+
+	if len(tokens) == 0 {
+		log.Fatal("No services specified for starting")
+	}
+
+	services := []string{}
+	for _, token := range tokens {
+		t := strings.TrimSpace(token)
+		services = append(services, t)
+	}
+
+	return services
+}
+
+func startTestWebhookEndpoint() {
+	http.HandleFunc("/", logIncomingRequest)
+
+	fmt.Printf("Starting server for testing...\n")
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func logIncomingRequest(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		log.Printf("Path not supoorted: %v", r.URL.Path)
+		http.Error(w, "404 not found.", http.StatusNotFound)
+		return
+	}
+
+	switch r.Method {
+	case "POST":
+		var body []byte
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			log.Printf("[Failed to read request body]: %v", err.Error())
+		}
+
+		log.Printf("[Test server incoming request]: %v, URL: %v", string(body), r.URL.Path)
+	default:
+		fmt.Fprintf(w, "Only POST methods are supported.")
+	}
+	w.WriteHeader(http.StatusOK)
 }
