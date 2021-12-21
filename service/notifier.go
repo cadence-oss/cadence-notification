@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -164,8 +165,16 @@ func (p *notifier) process(kafkaMsg messaging.Message) error {
 		p.metricScope.Counter(corruptedData)
 		return err
 	}
+	webhook, _ := p.getWebhookForMsg()
+	return p.notifySubscriber(decodedMsg, kafkaMsg, webhook)
+}
 
-	return p.notifySubscriber(decodedMsg, kafkaMsg)
+// TODO: retrieve webhook info for a message
+func (p *notifier) getWebhookForMsg() (*config.Webhook, error) {
+	url, _ := url.Parse("http://localhost:8081/")
+	return &config.Webhook{
+		URL: *url,
+	}, nil
 }
 
 func (p *notifier) deserialize(payload []byte) (*indexer.Message, error) {
@@ -176,7 +185,7 @@ func (p *notifier) deserialize(payload []byte) (*indexer.Message, error) {
 	return &msg, nil
 }
 
-func (p *notifier) notifySubscriber(decodedMsg *indexer.Message, kafkaMsg messaging.Message) error {
+func (p *notifier) notifySubscriber(decodedMsg *indexer.Message, kafkaMsg messaging.Message, webhook *config.Webhook) error {
 
 	switch decodedMsg.GetMessageType() {
 	case indexer.MessageTypeIndex:
@@ -185,7 +194,7 @@ func (p *notifier) notifySubscriber(decodedMsg *indexer.Message, kafkaMsg messag
 		if err != nil {
 			_ = kafkaMsg.Nack()
 		}
-		p.sendMessageToTestServer(notification)
+		p.sendMessageToWebhook(notification, webhook)
 		_ = kafkaMsg.Ack()
 	case indexer.MessageTypeDelete:
 		// this is when workflow run passes retention, noop for now
@@ -254,15 +263,16 @@ func (p *notifier) decodeSearchAttrBinary(bytes []byte, key string) interface{} 
 	return val
 }
 
-func (p *notifier) sendMessageToTestServer(notification *Notification) error {
+func (p *notifier) sendMessageToWebhook(notification *Notification, webhook *config.Webhook) error {
 	var jsonStr = []byte(fmt.Sprintf("%v", notification))
-	req, err := http.NewRequest("POST", "http://localhost:8081/", bytes.NewBuffer(jsonStr))
+	req, err := http.NewRequest("POST", webhook.URL.String(), bytes.NewBuffer(jsonStr))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("X-Custom-Header", "myvalue")
 	req.Header.Set("Content-Type", "application/json")
 
+	// TODO: setup retry logic using webhook config
 	client := &http.Client{}
 	p.logger.Info("sending http request")
 	resp, err := client.Do(req)
