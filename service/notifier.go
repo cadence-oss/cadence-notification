@@ -21,8 +21,11 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -182,7 +185,7 @@ func (p *notifier) notifySubscriber(decodedMsg *indexer.Message, kafkaMsg messag
 		if err != nil {
 			_ = kafkaMsg.Nack()
 		}
-		p.logger.Info("for testing notification consuming, will be removed in next PR: Notification", tag.Value(notification))
+		p.sendMessageToTestServer(notification)
 		_ = kafkaMsg.Ack()
 	case indexer.MessageTypeDelete:
 		// this is when workflow run passes retention, noop for now
@@ -249,4 +252,29 @@ func (p *notifier) decodeSearchAttrBinary(bytes []byte, key string) interface{} 
 		p.metricScope.Counter(corruptedData)
 	}
 	return val
+}
+
+func (p *notifier) sendMessageToTestServer(notification *Notification) error {
+	var jsonStr = []byte(fmt.Sprintf("%v", notification))
+	req, err := http.NewRequest("POST", "http://localhost:8081/", bytes.NewBuffer(jsonStr))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-Custom-Header", "myvalue")
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	p.logger.Info("sending http request")
+	resp, err := client.Do(req)
+	if err != nil {
+		p.logger.Error(err.Error())
+		return err
+	}
+	defer resp.Body.Close()
+
+	p.logger.Info(fmt.Sprintf("response Status: %v", resp.Status))
+	p.logger.Info(fmt.Sprintf("response Headers: %v", resp.Header))
+	body, _ := ioutil.ReadAll(resp.Body)
+	p.logger.Info(fmt.Sprintf("response Body: %v", string(body)))
+	return nil
 }
