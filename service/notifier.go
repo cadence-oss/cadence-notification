@@ -51,6 +51,7 @@ type notifier struct {
 	consumer         messaging.Consumer
 	subscriberConfig *config.Subscriber
 	consumerConfig   *config.KafkaConsumer
+	httpClient       *http.Client
 
 	msgEncoder  codec.BinaryEncoder
 	logger      log.Logger
@@ -76,6 +77,7 @@ func newNotifier(kafkaClient messaging.Client, subscriberConfig *config.Subscrib
 		consumerConfig:   &consumerConfig,
 		consumer:         consumer,
 		subscriberConfig: subscriberConfig,
+		httpClient:       &http.Client{},
 
 		msgEncoder:  codec.NewThriftRWEncoder(),
 		logger:      logger.WithTags(tag.Name("Notifier-" + subscriberConfig.Name)),
@@ -269,22 +271,20 @@ func (p *notifier) sendMessageToWebhook(notification *Notification, webhook *con
 	if err != nil {
 		return err
 	}
-	req.Header.Set("X-Custom-Header", "myvalue")
 	req.Header.Set("Content-Type", "application/json")
 
 	// TODO: setup retry logic using webhook config
-	client := &http.Client{}
-	p.logger.Info("sending http request")
-	resp, err := client.Do(req)
+	p.logger.Debug("sending http request")
+	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		p.logger.Error(err.Error())
 		return err
 	}
 	defer resp.Body.Close()
 
-	p.logger.Info(fmt.Sprintf("response Status: %v", resp.Status))
-	p.logger.Info(fmt.Sprintf("response Headers: %v", resp.Header))
+	p.logger.Debug(fmt.Sprintf("response Status: %v", resp.Status))
+	p.logger.Debug(fmt.Sprintf("response Headers: %v", resp.Header))
 	body, _ := ioutil.ReadAll(resp.Body)
-	p.logger.Info(fmt.Sprintf("response Body: %v", string(body)))
+	p.logger.Debug(fmt.Sprintf("response Body: %v", string(body)))
 	return nil
 }
