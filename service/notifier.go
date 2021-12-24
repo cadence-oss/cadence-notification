@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -167,16 +166,8 @@ func (p *notifier) process(kafkaMsg messaging.Message) error {
 		p.metricScope.Counter(corruptedData)
 		return err
 	}
-	webhook, _ := p.getWebhookForMsg()
-	return p.notifySubscriber(decodedMsg, kafkaMsg, webhook)
-}
 
-// TODO: retrieve webhook info for a message
-func (p *notifier) getWebhookForMsg() (*config.Webhook, error) {
-	url, _ := url.Parse("http://localhost:8081/")
-	return &config.Webhook{
-		URL: *url,
-	}, nil
+	return p.notifySubscriber(decodedMsg, kafkaMsg, &p.subscriberConfig.Delivery.Webhook)
 }
 
 func (p *notifier) deserialize(payload []byte) (*indexer.Message, error) {
