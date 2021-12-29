@@ -21,8 +21,11 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -47,6 +50,7 @@ type notifier struct {
 	consumer         messaging.Consumer
 	subscriberConfig *config.Subscriber
 	consumerConfig   *config.KafkaConsumer
+	httpClient       *http.Client
 
 	msgEncoder  codec.BinaryEncoder
 	logger      log.Logger
@@ -72,6 +76,7 @@ func newNotifier(kafkaClient messaging.Client, subscriberConfig *config.Subscrib
 		consumerConfig:   &consumerConfig,
 		consumer:         consumer,
 		subscriberConfig: subscriberConfig,
+		httpClient:       &http.Client{},
 
 		msgEncoder:  codec.NewThriftRWEncoder(),
 		logger:      logger.WithTags(tag.Name("Notifier-" + subscriberConfig.Name)),
@@ -162,7 +167,7 @@ func (p *notifier) process(kafkaMsg messaging.Message) error {
 		return err
 	}
 
-	return p.notifySubscriber(decodedMsg, kafkaMsg)
+	return p.notifySubscriber(decodedMsg, kafkaMsg, &p.subscriberConfig.Delivery.Webhook)
 }
 
 func (p *notifier) deserialize(payload []byte) (*indexer.Message, error) {
@@ -173,7 +178,7 @@ func (p *notifier) deserialize(payload []byte) (*indexer.Message, error) {
 	return &msg, nil
 }
 
-func (p *notifier) notifySubscriber(decodedMsg *indexer.Message, kafkaMsg messaging.Message) error {
+func (p *notifier) notifySubscriber(decodedMsg *indexer.Message, kafkaMsg messaging.Message, webhook *config.Webhook) error {
 
 	switch decodedMsg.GetMessageType() {
 	case indexer.MessageTypeIndex:
@@ -182,7 +187,7 @@ func (p *notifier) notifySubscriber(decodedMsg *indexer.Message, kafkaMsg messag
 		if err != nil {
 			_ = kafkaMsg.Nack()
 		}
-		p.logger.Info("for testing notification consuming, will be removed in next PR: Notification", tag.Value(notification))
+		p.sendMessageToWebhook(notification, webhook)
 		_ = kafkaMsg.Ack()
 	case indexer.MessageTypeDelete:
 		// this is when workflow run passes retention, noop for now
@@ -198,7 +203,6 @@ func (p *notifier) notifySubscriber(decodedMsg *indexer.Message, kafkaMsg messag
 
 func (p *notifier) generateNotification(msg *indexer.Message, id string) (*Notification, error) {
 	searchAttrs, memo, err := p.dumpAllFieldsToMap(msg.Fields)
-	p.logger.Info("for testing notification consuming, will be removed in next PR: maps", tag.Value(searchAttrs))
 	if err != nil {
 		return nil, err
 	}
@@ -249,4 +253,28 @@ func (p *notifier) decodeSearchAttrBinary(bytes []byte, key string) interface{} 
 		p.metricScope.Counter(corruptedData)
 	}
 	return val
+}
+
+func (p *notifier) sendMessageToWebhook(notification *Notification, webhook *config.Webhook) error {
+	var jsonStr = []byte(fmt.Sprintf("%v", notification))
+	req, err := http.NewRequest("POST", webhook.URL.String(), bytes.NewBuffer(jsonStr))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// TODO: setup retry logic using webhook config
+	p.logger.Debug("sending http request")
+	resp, err := p.httpClient.Do(req)
+	if err != nil {
+		p.logger.Error(err.Error())
+		return err
+	}
+	defer resp.Body.Close()
+
+	p.logger.Debug(fmt.Sprintf("response Status: %v", resp.Status))
+	p.logger.Debug(fmt.Sprintf("response Headers: %v", resp.Header))
+	body, _ := ioutil.ReadAll(resp.Body)
+	p.logger.Debug(fmt.Sprintf("response Body: %v", string(body)))
+	return nil
 }

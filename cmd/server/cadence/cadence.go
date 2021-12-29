@@ -197,14 +197,14 @@ func startTestWebhookEndpoint() {
 	http.HandleFunc("/", logIncomingRequest)
 
 	fmt.Printf("Starting server for testing...\n")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	if err := http.ListenAndServe(":8081", nil); err != nil {
 		log.Fatal(err)
 	}
 }
 
 func logIncomingRequest(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
-		log.Printf("Path not supoorted: %v", r.URL.Path)
+		log.Printf("Path not supported: %v", r.URL.Path)
 		http.Error(w, "404 not found.", http.StatusNotFound)
 		return
 	}
@@ -218,8 +218,10 @@ func logIncomingRequest(w http.ResponseWriter, r *http.Request) {
 		}
 
 		log.Printf("[Test server incoming request]: %v, URL: %v", string(body), r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+		break
 	default:
-		fmt.Fprintf(w, "Only POST methods are supported.")
+		log.Printf("Only POST methods are supported.")
+		w.WriteHeader(http.StatusBadRequest)
 	}
-	w.WriteHeader(http.StatusOK)
 }
