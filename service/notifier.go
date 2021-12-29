@@ -203,7 +203,6 @@ func (p *notifier) notifySubscriber(decodedMsg *indexer.Message, kafkaMsg messag
 
 func (p *notifier) generateNotification(msg *indexer.Message, id string) (*Notification, error) {
 	searchAttrs, memo, err := p.dumpAllFieldsToMap(msg.Fields)
-	p.logger.Info("for testing notification consuming, will be removed in next PR: maps", tag.Value(searchAttrs))
 	if err != nil {
 		return nil, err
 	}
