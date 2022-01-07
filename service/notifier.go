@@ -197,7 +197,7 @@ func (p *notifier) notifySubscriber(decodedMsg *indexer.Message, kafkaMsg messag
 		backoff.Retry(
 			func() error { return p.sendMessageToWebhook(notification, webhook) },
 			p.retryPolicy,
-			func(error) bool { return true })
+			nil)
 		p.sendMessageToWebhook(notification, webhook)
 		_ = kafkaMsg.Ack()
 	case indexer.MessageTypeDelete:
@@ -282,6 +282,10 @@ func (p *notifier) sendMessageToWebhook(notification *Notification, webhook *con
 		return err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP request failed")
+	}
 
 	p.logger.Debug(fmt.Sprintf("response Status: %v", resp.Status))
 	p.logger.Debug(fmt.Sprintf("response Headers: %v", resp.Header))
