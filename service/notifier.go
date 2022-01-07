@@ -33,6 +33,7 @@ import (
 	"github.com/uber-go/tally"
 	"github.com/uber/cadence/.gen/go/indexer"
 	"github.com/uber/cadence/common"
+	"github.com/uber/cadence/common/backoff"
 	"github.com/uber/cadence/common/codec"
 	"github.com/uber/cadence/common/definition"
 	"github.com/uber/cadence/common/log"
@@ -51,6 +52,7 @@ type notifier struct {
 	subscriberConfig *config.Subscriber
 	consumerConfig   *config.KafkaConsumer
 	httpClient       *http.Client
+	retryPolicy      *backoff.ExponentialRetryPolicy
 
 	msgEncoder  codec.BinaryEncoder
 	logger      log.Logger
@@ -69,6 +71,9 @@ var (
 func newNotifier(kafkaClient messaging.Client, subscriberConfig *config.Subscriber, logger log.Logger, metricScope tally.Scope) (*notifier, error) {
 	consumerConfig := subscriberConfig.Consumer
 	consumer, err := kafkaClient.NewConsumer(subscriberConfig.Name, consumerConfig.ConsumerGroup)
+	exponentialRetryPolicy := backoff.NewExponentialRetryPolicy(subscriberConfig.Delivery.Webhook.RetryInterval)
+	exponentialRetryPolicy.SetMaximumAttempts(subscriberConfig.Delivery.Webhook.MaxRetries)
+
 	if err != nil {
 		return nil, err
 	}
@@ -77,6 +82,7 @@ func newNotifier(kafkaClient messaging.Client, subscriberConfig *config.Subscrib
 		consumer:         consumer,
 		subscriberConfig: subscriberConfig,
 		httpClient:       &http.Client{},
+		retryPolicy:      exponentialRetryPolicy,
 
 		msgEncoder:  codec.NewThriftRWEncoder(),
 		logger:      logger.WithTags(tag.Name("Notifier-" + subscriberConfig.Name)),
@@ -187,6 +193,11 @@ func (p *notifier) notifySubscriber(decodedMsg *indexer.Message, kafkaMsg messag
 		if err != nil {
 			_ = kafkaMsg.Nack()
 		}
+
+		backoff.Retry(
+			func() error { return p.sendMessageToWebhook(notification, webhook) },
+			p.retryPolicy,
+			func(error) bool { return true })
 		p.sendMessageToWebhook(notification, webhook)
 		_ = kafkaMsg.Ack()
 	case indexer.MessageTypeDelete:
