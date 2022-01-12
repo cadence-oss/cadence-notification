@@ -198,7 +198,6 @@ func (p *notifier) notifySubscriber(decodedMsg *indexer.Message, kafkaMsg messag
 			func() error { return p.sendMessageToWebhook(notification, webhook) },
 			p.retryPolicy,
 			nil)
-		p.sendMessageToWebhook(notification, webhook)
 		_ = kafkaMsg.Ack()
 	case indexer.MessageTypeDelete:
 		// this is when workflow run passes retention, noop for now
