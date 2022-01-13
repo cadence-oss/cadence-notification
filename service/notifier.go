@@ -81,7 +81,7 @@ func newNotifier(kafkaClient messaging.Client, subscriberConfig *config.Subscrib
 		consumerConfig:   &consumerConfig,
 		consumer:         consumer,
 		subscriberConfig: subscriberConfig,
-		httpClient:       &http.Client{},
+		httpClient:       &http.Client{Timeout: subscriberConfig.Delivery.Webhook.CallbackRequestTimeout},
 		retryPolicy:      exponentialRetryPolicy,
 
 		msgEncoder:  codec.NewThriftRWEncoder(),
