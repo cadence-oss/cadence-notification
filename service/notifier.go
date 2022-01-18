@@ -33,6 +33,7 @@ import (
 	"github.com/uber-go/tally"
 	"github.com/uber/cadence/.gen/go/indexer"
 	"github.com/uber/cadence/common"
+	"github.com/uber/cadence/common/backoff"
 	"github.com/uber/cadence/common/codec"
 	"github.com/uber/cadence/common/definition"
 	"github.com/uber/cadence/common/log"
@@ -51,6 +52,7 @@ type notifier struct {
 	subscriberConfig *config.Subscriber
 	consumerConfig   *config.KafkaConsumer
 	httpClient       *http.Client
+	retryPolicy      *backoff.ExponentialRetryPolicy
 
 	msgEncoder  codec.BinaryEncoder
 	logger      log.Logger
@@ -69,6 +71,9 @@ var (
 func newNotifier(kafkaClient messaging.Client, subscriberConfig *config.Subscriber, logger log.Logger, metricScope tally.Scope) (*notifier, error) {
 	consumerConfig := subscriberConfig.Consumer
 	consumer, err := kafkaClient.NewConsumer(subscriberConfig.Name, consumerConfig.ConsumerGroup)
+	exponentialRetryPolicy := backoff.NewExponentialRetryPolicy(subscriberConfig.Delivery.Webhook.RetryInterval)
+	exponentialRetryPolicy.SetMaximumAttempts(subscriberConfig.Delivery.Webhook.MaxRetries)
+
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +81,8 @@ func newNotifier(kafkaClient messaging.Client, subscriberConfig *config.Subscrib
 		consumerConfig:   &consumerConfig,
 		consumer:         consumer,
 		subscriberConfig: subscriberConfig,
-		httpClient:       &http.Client{},
+		httpClient:       &http.Client{Timeout: subscriberConfig.Delivery.Webhook.CallbackRequestTimeout},
+		retryPolicy:      exponentialRetryPolicy,
 
 		msgEncoder:  codec.NewThriftRWEncoder(),
 		logger:      logger.WithTags(tag.Name("Notifier-" + subscriberConfig.Name)),
@@ -187,7 +193,11 @@ func (p *notifier) notifySubscriber(decodedMsg *indexer.Message, kafkaMsg messag
 		if err != nil {
 			_ = kafkaMsg.Nack()
 		}
-		p.sendMessageToWebhook(notification, webhook)
+
+		backoff.Retry(
+			func() error { return p.sendMessageToWebhook(notification, webhook) },
+			p.retryPolicy,
+			nil)
 		_ = kafkaMsg.Ack()
 	case indexer.MessageTypeDelete:
 		// this is when workflow run passes retention, noop for now
@@ -271,6 +281,10 @@ func (p *notifier) sendMessageToWebhook(notification *Notification, webhook *con
 		return err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP request failed")
+	}
 
 	p.logger.Debug(fmt.Sprintf("response Status: %v", resp.Status))
 	p.logger.Debug(fmt.Sprintf("response Headers: %v", resp.Header))
