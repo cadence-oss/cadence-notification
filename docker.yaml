@@ -1,0 +1,20 @@
+log:
+    stdout: true
+    level: info
+
+kafka:
+    tls:
+        enabled: false
+    clusters:
+        test:
+            brokers:
+                - :9092
+    topics:
+        cadence-visibility-dev:
+            cluster: test
+        cadence-visibility-dev-dlq:
+            cluster: test
+    applications:
+        visibility:
+            topic: cadence-visibility-dev
+            dlq-topic: cadence-visibility-dev-dlq

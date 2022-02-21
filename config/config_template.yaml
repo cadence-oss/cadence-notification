@@ -1,0 +1,43 @@
+log:
+  stdout: true
+  level: {{ default .Env.LOG_LEVEL "info" }}
+
+service:
+  subscribers:
+    - name: notificationAppA
+      delivery:
+        method: "webhook"
+        webhook:
+          url:
+            scheme: {{ default .Env.WEBHOOK_SHCEME "HTTP" }}
+            host: {{ default .Env.WEBHOOK_URL "127.0.0.1:8810" }}
+          retryInterval: 10s # default to 1s
+      consumer:
+        consumerGroup: cadence-notificationAppA-group
+        consumerGroupDlqTopic: cadence-notificationAppA-group-dlq
+        iniitalOffset: "newest" # or "oldest"
+      filter:
+        selectedDomains: # if empty, then notification messages will include all domains
+          - domainA
+          - domainB
+  metrics:
+    prometheus:
+      timerType: {{ default .Env.PROMETHEUS_TIMER_TYPE "histogram" }}
+      listenAddress: {{ .Env.PROMETHEUS_ENDPOINT }}
+
+kafka:
+  tls:
+    enabled: false
+  clusters:
+    test:
+      brokers:
+        - {{ default .Env.KAFKA_SEEDS "" }}:{{ default .Env.KAFKA_PORT "9092" }}
+  topics:
+    {{ default .Env.VISIBILITY_NAME "cadence-visibility-dev" }}:
+      cluster: test
+    {{ default .Env.VISIBILITY_NAME "cadence-visibility-dev" }}-dlq:
+      cluster: test
+  applications:
+    notificationAppA:
+      topic: {{ default .Env.VISIBILITY_NAME "cadence-visibility-dev" }}
+      dlq-topic: {{ default .Env.VISIBILITY_NAME "cadence-visibility-dev" }}-dlq
