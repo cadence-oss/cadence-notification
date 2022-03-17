@@ -222,6 +222,9 @@ func (p *notifier) generateNotification(msg *indexer.Message, id string) (*Notif
 		WorkflowID: msg.GetWorkflowID(),
 		RunID:      msg.GetRunID(),
 		// TODO WorkflowType, startedTime, closedTime
+		WorkflowType:     searchAttrs["WorkflowType"].(string),
+		StartedTimestamp: searchAttrs["StartTime"].(time.Time),
+		ClosedTimestamp:  searchAttrs["CloseTime"].(time.Time),
 		SearchAttributes: searchAttrs,
 		Memo:             memo,
 	}
