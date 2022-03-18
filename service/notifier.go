@@ -231,11 +231,10 @@ func (p *notifier) generateNotification(msg *indexer.Message, id string) (*Notif
 	}
 
 	notification := &Notification{
-		ID:         id,
-		DomainID:   msg.GetDomainID(),
-		WorkflowID: msg.GetWorkflowID(),
-		RunID:      msg.GetRunID(),
-		// TODO WorkflowType, startedTime, closedTime
+		ID:               id,
+		DomainID:         msg.GetDomainID(),
+		WorkflowID:       msg.GetWorkflowID(),
+		RunID:            msg.GetRunID(),
 		WorkflowType:     workflowType,
 		StartedTimestamp: startTime,
 		ClosedTimestamp:  closeTime,
