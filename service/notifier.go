@@ -36,6 +36,7 @@ import (
 	"github.com/uber/cadence/common/backoff"
 	"github.com/uber/cadence/common/codec"
 	"github.com/uber/cadence/common/definition"
+	es "github.com/uber/cadence/common/elasticsearch"
 	"github.com/uber/cadence/common/log"
 	"github.com/uber/cadence/common/log/tag"
 	"github.com/uber/cadence/common/messaging"
@@ -217,13 +218,25 @@ func (p *notifier) generateNotification(msg *indexer.Message, id string) (*Notif
 		return nil, err
 	}
 	notification := &Notification{
-		ID:         id,
-		DomainID:   msg.GetDomainID(),
-		WorkflowID: msg.GetWorkflowID(),
-		RunID:      msg.GetRunID(),
-		// TODO WorkflowType, startedTime, closedTime
+		ID:               id,
+		DomainID:         msg.GetDomainID(),
+		WorkflowID:       msg.GetWorkflowID(),
+		RunID:            msg.GetRunID(),
 		SearchAttributes: searchAttrs,
 		Memo:             memo,
+	}
+	// @see cadence common/persistence/elasticsearch/esVisibilityStore.go
+	if workflowType, ok := searchAttrs[es.WorkflowType]; ok {
+		notification.WorkflowType = workflowType.(string)
+	}
+	if startTimeNano, ok := searchAttrs[es.StartTime]; ok {
+		notification.StartedTimestamp = time.Unix(0, startTimeNano.(int64))
+	}
+	if closeTimeNano, ok := searchAttrs[es.CloseTime]; ok {
+		notification.ClosedTimestamp = time.Unix(0, closeTimeNano.(int64))
+	}
+	if executionTimeNano, ok := searchAttrs[es.ExecutionTime]; ok {
+		notification.ExecutionTimestamp = time.Unix(0, executionTimeNano.(int64))
 	}
 	return notification, nil
 }
