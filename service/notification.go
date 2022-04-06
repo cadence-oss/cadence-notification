@@ -7,14 +7,15 @@ type (
 		ID               string
 		NotificationType NotificationTypeEnum
 		// TODO: replace with domainName, need to pass by Cadence server
-		DomainID         string
-		WorkflowID       string
-		RunID            string
-		WorkflowType     string
-		StartedTimestamp time.Time
-		ClosedTimestamp  time.Time
-		SearchAttributes map[string]interface{}
-		Memo             map[string]interface{}
+		DomainID           string
+		WorkflowID         string
+		RunID              string
+		WorkflowType       string
+		StartedTimestamp   time.Time
+		ExecutionTimestamp time.Time
+		ClosedTimestamp    time.Time
+		SearchAttributes   map[string]interface{}
+		Memo               map[string]interface{}
 	}
 
 	NotificationTypeEnum string
