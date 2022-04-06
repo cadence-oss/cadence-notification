@@ -217,11 +217,28 @@ func (p *notifier) generateNotification(msg *indexer.Message, id string) (*Notif
 	if err != nil {
 		return nil, err
 	}
+	var workflowType string
+	var startTime time.Time
+	var closeTime time.Time
+
+	if searchAttrs["WorkflowType"] != nil {
+		workflowType = searchAttrs["WorkflowType"].(string)
+	}
+	if searchAttrs["StartTime"] != nil {
+		startTime = time.Unix(searchAttrs["StartTime"].(int64), 0)
+	}
+	if searchAttrs["CloseTime"] != nil {
+		closeTime = time.Unix(searchAttrs["CloseTime"].(int64), 0)
+	}
+
 	notification := &Notification{
 		ID:               id,
 		DomainID:         msg.GetDomainID(),
 		WorkflowID:       msg.GetWorkflowID(),
 		RunID:            msg.GetRunID(),
+		WorkflowType:     workflowType,
+		StartedTimestamp: startTime,
+		ClosedTimestamp:  closeTime,
 		SearchAttributes: searchAttrs,
 		Memo:             memo,
 	}
