@@ -221,39 +221,31 @@ func (p *notifier) generateNotification(msg *indexer.Message, id string) (*Notif
 	var startTime time.Time
 	var closeTime time.Time
 
-	if searchAttrs["WorkflowType"] != nil {
-		workflowType = searchAttrs["WorkflowType"].(string)
+	// @see cadence common/persistence/elasticsearch/esVisibilityStore.go
+	if searchAttrs[es.WorkflowType] != nil {
+		workflowType = searchAttrs[es.WorkflowType].(string)
 	}
-	if searchAttrs["StartTime"] != nil {
-		startTime = time.Unix(searchAttrs["StartTime"].(int64), 0)
+	if searchAttrs[es.StartTime] != nil {
+		startTime = time.Unix(searchAttrs[es.StartTime].(int64), 0)
 	}
-	if searchAttrs["CloseTime"] != nil {
-		closeTime = time.Unix(searchAttrs["CloseTime"].(int64), 0)
+	if searchAttrs[es.CloseTime] != nil {
+		closeTime = time.Unix(searchAttrs[es.CloseTime].(int64), 0)
+	}
+	if searchAttrs[es.ExecutionTime] != nil {
+		closeTime = time.Unix(searchAttrs[es.ExecutionTime].(int64), 0)
 	}
 
 	notification := &Notification{
-		ID:               id,
-		DomainID:         msg.GetDomainID(),
-		WorkflowID:       msg.GetWorkflowID(),
-		RunID:            msg.GetRunID(),
-		WorkflowType:     workflowType,
-		StartedTimestamp: startTime,
-		ClosedTimestamp:  closeTime,
-		SearchAttributes: searchAttrs,
-		Memo:             memo,
-	}
-	// @see cadence common/persistence/elasticsearch/esVisibilityStore.go
-	if workflowType, ok := searchAttrs[es.WorkflowType]; ok {
-		notification.WorkflowType = workflowType.(string)
-	}
-	if startTimeNano, ok := searchAttrs[es.StartTime]; ok {
-		notification.StartedTimestamp = time.Unix(0, startTimeNano.(int64))
-	}
-	if closeTimeNano, ok := searchAttrs[es.CloseTime]; ok {
-		notification.ClosedTimestamp = time.Unix(0, closeTimeNano.(int64))
-	}
-	if executionTimeNano, ok := searchAttrs[es.ExecutionTime]; ok {
-		notification.ExecutionTimestamp = time.Unix(0, executionTimeNano.(int64))
+		ID:                 id,
+		DomainID:           msg.GetDomainID(),
+		WorkflowID:         msg.GetWorkflowID(),
+		RunID:              msg.GetRunID(),
+		WorkflowType:       workflowType,
+		StartedTimestamp:   startTime,
+		ClosedTimestamp:    closeTime,
+		ExecutionTimestamp: closeTime,
+		SearchAttributes:   searchAttrs,
+		Memo:               memo,
 	}
 	return notification, nil
 }
