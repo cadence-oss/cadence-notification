@@ -7,7 +7,7 @@ services:
   prometheus:
     image: prom/prometheus:latest
     volumes:
-      - ./prometheus_config.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus:/etc/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
     ports:
@@ -79,8 +79,6 @@ services:
     image: ubercadence/cadence-notification:0.0.1
     depends_on:
       - cadence
-    ports:
-      - '3000:3000'
     environment:
       - "KAFKA_SEEDS=kafka"
       - "PROMETHEUS_ENDPOINT_0=0.0.0.0:8004"
