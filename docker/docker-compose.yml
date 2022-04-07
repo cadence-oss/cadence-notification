@@ -79,6 +79,10 @@ services:
     image: ubercadence/cadence-notification:0.0.2
     depends_on:
       - cadence
+      - kafka
+      - zookeeper
+      - elasticsearch
+      - prometheus
     environment:
       - "KAFKA_SEEDS=kafka"
       - "PROMETHEUS_ENDPOINT_0=0.0.0.0:8004"
