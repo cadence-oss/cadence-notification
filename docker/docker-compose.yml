@@ -76,7 +76,7 @@ services:
     ports:
       - '3000:3000'
   cadence-notification:
-    image: ubercadence/cadence-notification:0.0.1
+    image: ubercadence/cadence-notification:0.0.2
     depends_on:
       - cadence
     environment:
