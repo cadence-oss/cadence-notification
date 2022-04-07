@@ -10,7 +10,7 @@ service:
         webhook:
           url:
             scheme: {{ default .Env.WEBHOOK_SHCEME "HTTP" }}
-            host: {{ default .Env.WEBHOOK_URL "127.0.0.1:8810" }}
+            host: {{default .Env.WEBHOOK_URL "127.0.0.1:8801"}}
           retryInterval: 10s # default to 1s
       consumer:
         consumerGroup: cadence-notificationAppA-group

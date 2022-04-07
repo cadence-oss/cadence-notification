@@ -197,7 +197,8 @@ func startTestWebhookEndpoint() {
 	http.HandleFunc("/", logIncomingRequest)
 
 	fmt.Printf("Starting server for testing...\n")
-	if err := http.ListenAndServe(":8081", nil); err != nil {
+	// TODO make test webhook endpoint port configurable
+	if err := http.ListenAndServe(":8801", nil); err != nil {
 		log.Fatal(err)
 	}
 }
