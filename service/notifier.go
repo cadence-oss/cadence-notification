@@ -288,8 +288,12 @@ func (p *notifier) decodeSearchAttrBinary(bytes []byte, key string) interface{} 
 }
 
 func (p *notifier) sendMessageToWebhook(notification *Notification, webhook *config.Webhook) error {
-	var jsonStr = []byte(fmt.Sprintf("%v", notification))
-	req, err := http.NewRequest("POST", webhook.URL.String(), bytes.NewBuffer(jsonStr))
+	jsonBytes, err := json.Marshal(notification)
+	if err != nil {
+		p.logger.Error(err.Error())
+		return err
+	}
+	req, err := http.NewRequest("POST", webhook.URL.String(), bytes.NewBuffer(jsonBytes))
 	if err != nil {
 		return err
 	}
