@@ -80,6 +80,10 @@ func getConfigDir(c *cli.Context) string {
 	return constructPathIfNeed(getRootDir(c), c.GlobalString("config"))
 }
 
+func getReceiverAddress(c *cli.Context) string {
+	return strings.TrimSpace(c.GlobalString("receiver_address"))
+}
+
 func getRootDir(c *cli.Context) string {
 	dirpath := c.GlobalString("root")
 	if len(dirpath) == 0 {
@@ -133,6 +137,12 @@ func BuildCLI() *cli.App {
 			Usage:  "availability zone",
 			EnvVar: cconfig.EnvKeyAvailabilityZone,
 		},
+		cli.StringFlag{
+			Name: "receiver_address, ra",
+			Value: ":8801",
+			Usage: "receiver address",
+			EnvVar: config.EnvKeyReceiverAddress,
+		},
 	}
 
 	app.Commands = []cli.Command{
@@ -169,7 +179,7 @@ func launchService(service string, c *cli.Context) {
 		startHandler(c)
 		break
 	case "receiver":
-		startTestWebhookEndpoint()
+		startTestWebhookEndpoint(c)
 		break
 	default:
 		log.Printf("Invalid service: %v", service)
@@ -193,12 +203,12 @@ func getServices(c *cli.Context) []string {
 	return services
 }
 
-func startTestWebhookEndpoint() {
+func startTestWebhookEndpoint(c *cli.Context) {
+	addr := getReceiverAddress(c)
 	http.HandleFunc("/", logIncomingRequest)
 
-	fmt.Printf("Starting server for testing...\n")
-	// TODO make test webhook endpoint port configurable
-	if err := http.ListenAndServe(":8801", nil); err != nil {
+	fmt.Printf("Starting server %s for testing...\n", addr)
+	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Fatal(err)
 	}
 }

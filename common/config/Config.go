@@ -28,6 +28,10 @@ import (
 	cconfig "github.com/uber/cadence/common/config"
 )
 
+const (
+	EnvKeyReceiverAddress = "RECEIVER_ADDRESS"
+)
+
 type (
 	// Config contains the configuration for a set of cadence services
 	Config struct {
