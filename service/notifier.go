@@ -195,10 +195,13 @@ func (p *notifier) notifySubscriber(decodedMsg *indexer.Message, kafkaMsg messag
 			_ = kafkaMsg.Nack()
 		}
 
-		backoff.Retry(
+		err = backoff.Retry(
 			func() error { return p.sendMessageToWebhook(notification, webhook) },
 			p.retryPolicy,
 			nil)
+		if err != nil {
+			_ = kafkaMsg.Nack()
+		}
 		_ = kafkaMsg.Ack()
 	case indexer.MessageTypeDelete:
 		// this is when workflow run passes retention, noop for now
@@ -299,7 +302,6 @@ func (p *notifier) sendMessageToWebhook(notification *Notification, webhook *con
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	// TODO: setup retry logic using webhook config
 	p.logger.Debug("sending http request")
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
