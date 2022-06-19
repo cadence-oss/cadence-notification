@@ -1,15 +1,11 @@
 package service
 
-import (
-	"time"
-
-	"github.com/uber/cadence/common"
-)
+import "time"
 
 type (
 	Notification struct {
-		ID                  string
-		VisibilityOperation common.VisibilityOperation
+		ID               string
+		NotificationType NotificationTypeEnum
 		// TODO: replace with domainName, need to pass by Cadence server
 		DomainID         string
 		WorkflowID       string
@@ -22,4 +18,12 @@ type (
 		SearchAttributes   map[string]interface{}
 		Memo               map[string]interface{}
 	}
+
+	NotificationTypeEnum string
+)
+
+const (
+	NotificationTypeWorkflowStarted NotificationTypeEnum = "workflowStarted"
+	NotificationTypeWorkflowClosed NotificationTypeEnum = "workflowClosed"
+	NotificationTypeWorkflowUpsertSearchAttributes NotificationTypeEnum = "upsertSearchAttributes"
 )
