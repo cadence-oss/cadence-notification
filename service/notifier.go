@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -217,36 +218,52 @@ func (p *notifier) generateNotification(msg *indexer.Message, id string) (*Notif
 	if err != nil {
 		return nil, err
 	}
+
+	notification := &Notification{
+		ID:               id,
+		DomainID:         msg.GetDomainID(),
+		WorkflowID:       msg.GetWorkflowID(),
+		RunID:            msg.GetRunID(),
+		SearchAttributes: searchAttrs,
+		Memo:             memo,
+	}
+
 	var workflowType string
 	var startTime time.Time
 	var closeTime time.Time
+	var executionTime time.Time
 
 	// @see cadence common/persistence/elasticsearch/esVisibilityStore.go
 	if searchAttrs[es.WorkflowType] != nil {
 		workflowType = searchAttrs[es.WorkflowType].(string)
+		notification.WorkflowType = workflowType
 	}
-	if searchAttrs[es.StartTime] != nil {
-		startTime = time.Unix(searchAttrs[es.StartTime].(int64), 0)
+	if searchAttrs[es.StartTime] != nil && searchAttrs[es.StartTime].(int64) != 0 {
+		startTime = time.Unix(0, searchAttrs[es.StartTime].(int64))
+		notification.StartedTimestamp = &startTime
 	}
-	if searchAttrs[es.CloseTime] != nil {
-		closeTime = time.Unix(searchAttrs[es.CloseTime].(int64), 0)
+	if searchAttrs[es.CloseTime] != nil && searchAttrs[es.CloseTime].(int64) != 0 {
+		closeTime = time.Unix(0, searchAttrs[es.CloseTime].(int64))
+		notification.ClosedTimestamp = &closeTime
 	}
-	if searchAttrs[es.ExecutionTime] != nil {
-		closeTime = time.Unix(searchAttrs[es.ExecutionTime].(int64), 0)
+	if searchAttrs[es.ExecutionTime] != nil && searchAttrs[es.ExecutionTime].(int64) != 0 {
+		executionTime = time.Unix(0, searchAttrs[es.ExecutionTime].(int64))
+		notification.ExecutionTimestamp = &executionTime
 	}
 
-	notification := &Notification{
-		ID:                 id,
-		DomainID:           msg.GetDomainID(),
-		WorkflowID:         msg.GetWorkflowID(),
-		RunID:              msg.GetRunID(),
-		WorkflowType:       workflowType,
-		StartedTimestamp:   startTime,
-		ClosedTimestamp:    closeTime,
-		ExecutionTimestamp: closeTime,
-		SearchAttributes:   searchAttrs,
-		Memo:               memo,
+	if msg.VisibilityOperation != nil {
+		switch *msg.VisibilityOperation {
+		case indexer.VisibilityOperationRecordStarted:
+			notification.VisibilityOperation = common.RecordStarted
+		case indexer.VisibilityOperationRecordClosed:
+			notification.VisibilityOperation = common.RecordClosed
+		case indexer.VisibilityOperationUpsertSearchAttributes:
+			notification.VisibilityOperation = common.UpsertSearchAttributes
+		default:
+			p.logger.Error("Unknown Visibility Operation: " + strconv.Itoa(int(*msg.VisibilityOperation)))
+		}
 	}
+
 	return notification, nil
 }
 

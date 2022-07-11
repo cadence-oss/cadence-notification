@@ -15,10 +15,10 @@ type (
 		WorkflowID       string
 		RunID            string
 		WorkflowType     string
-		StartedTimestamp time.Time
+		StartedTimestamp *time.Time
 		// the actual time that starting execution, this is used mainly for cron schedule workflow
-		ExecutionTimestamp time.Time
-		ClosedTimestamp    time.Time
+		ExecutionTimestamp *time.Time
+		ClosedTimestamp    *time.Time
 		SearchAttributes   map[string]interface{}
 		Memo               map[string]interface{}
 	}
