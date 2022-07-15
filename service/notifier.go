@@ -22,6 +22,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -196,10 +197,10 @@ func (p *notifier) notifySubscriber(decodedMsg *indexer.Message, kafkaMsg messag
 			_ = kafkaMsg.Nack()
 		}
 
-		Retry(
+		backoff.NewThrottleRetry().Do(
+			context.Background(),
 			func() error { return p.sendMessageToWebhook(notification, webhook) },
-			p.retryPolicy,
-			nil)
+		)
 		_ = kafkaMsg.Ack()
 	case indexer.MessageTypeDelete:
 		// this is when workflow run passes retention, noop for now
@@ -334,38 +335,4 @@ func (p *notifier) sendMessageToWebhook(notification *Notification, webhook *con
 	body, _ := ioutil.ReadAll(resp.Body)
 	p.logger.Debug(fmt.Sprintf("response Body: %v", string(body)))
 	return nil
-}
-
-func Retry(operation backoff.Operation, policy backoff.RetryPolicy, isRetryable backoff.IsRetryable) error {
-	var prevErr error
-	var err error
-	var next time.Duration
-
-	r := backoff.NewRetrier(policy, backoff.SystemClock)
-	for {
-		// record the previous error before an operation
-		prevErr = err
-
-		// operation completed successfully.  No need to retry.
-		if err = operation(); err == nil {
-			return nil
-		}
-
-		if next = r.NextBackOff(); next == -1 {
-			if prevErr != nil {
-				return prevErr
-			}
-			return err
-		}
-
-		// Check if the error is retryable
-		if isRetryable != nil && !isRetryable(err) {
-			if prevErr != nil {
-				return prevErr
-			}
-			return err
-		}
-
-		time.Sleep(next)
-	}
 }
