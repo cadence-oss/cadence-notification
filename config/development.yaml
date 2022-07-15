@@ -12,7 +12,7 @@ service:
       consumer:
         consumerGroup: cadence-notificationAppA-group
         consumerGroupDlqTopic: cadence-notificationAppA-group-dlq
-        iniitalOffset: "newest" # or "oldest"
+        initialOffset: "newest" # or "oldest"
       filter:
         selectedDomains: # if empty, then notification messages will include all domains
           - domainA

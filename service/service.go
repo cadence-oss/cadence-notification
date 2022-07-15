@@ -67,7 +67,7 @@ func (s *Service) Start() {
 	}
 	s.logger.Info("notification service starting")
 
-	metricsClient := metrics.NewClient(s.metricScope, service.GetMetricsServiceIdx(common.WorkerServiceName, s.logger))
+	metricsClient := metrics.NewClient(s.metricScope, service.GetMetricsServiceIdx(service.Worker, s.logger))
 	kafkaClient := kafka.NewKafkaClient(&s.config.Kafka, metricsClient, s.logger, s.metricScope, false)
 	var notifiers []*notifier
 	for _, sub := range s.config.Service.Subscribers {
